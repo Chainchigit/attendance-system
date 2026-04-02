@@ -103,9 +103,7 @@ export function drawDetectionOverlay(
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, width, height);
 
-    const label = isKnown
-      ? `${match!.user.name} (${match!.distance.toFixed(2)})`
-      : "Unknown";
+    const label = isKnown ? match!.user.name : "Unknown";
 
     ctx.font = "bold 14px Inter, sans-serif";
     const textWidth = ctx.measureText(label).width;
