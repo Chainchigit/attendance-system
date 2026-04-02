@@ -24,6 +24,8 @@ export function Register() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [faceStatus, setFaceStatus] = useState<FaceStatus>("idle");
   const [capturedDescriptor, setCapturedDescriptor] = useState<number[] | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [captureProgress, setCaptureProgress] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const captureCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -153,37 +155,57 @@ export function Register() {
       return;
     }
 
-    const video = videoRef.current;
-    const canvas = captureCanvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const SAMPLE_COUNT = 5;
+    const SAMPLE_INTERVAL_MS = 250;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+    setCapturing(true);
+    const collectedDescriptors: Float32Array[] = [];
+    let lastValidCanvas = "";
 
-    const detections = await detectAllFacesWithDescriptors(canvas);
+    for (let i = 0; i < SAMPLE_COUNT; i++) {
+      setCaptureProgress(i + 1);
 
-    if (detections.length === 0) {
+      const video = videoRef.current;
+      const canvas = captureCanvasRef.current;
+      if (!video || !canvas) break;
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")!.drawImage(video, 0, 0);
+
+      const detections = await detectAllFacesWithDescriptors(canvas);
+
+      if (detections.length === 1) {
+        collectedDescriptors.push(detections[0].descriptor);
+        lastValidCanvas = canvas.toDataURL("image/png");
+      }
+
+      if (i < SAMPLE_COUNT - 1) {
+        await new Promise((r) => setTimeout(r, SAMPLE_INTERVAL_MS));
+      }
+    }
+
+    setCapturing(false);
+    setCaptureProgress(0);
+
+    if (collectedDescriptors.length === 0) {
       toast({
         variant: "destructive",
-        title: "No face detected",
-        description: "Position your face clearly in front of the camera.",
+        title: "Capture failed",
+        description: "Could not detect a clear face in any frame. Make sure your face is well-lit and centred.",
       });
       return;
     }
 
-    if (detections.length > 1) {
-      toast({
-        variant: "destructive",
-        title: "Multiple faces detected",
-        description: `Found ${detections.length} faces. Only one person should be in frame.`,
-      });
-      return;
+    // Average all collected descriptors for a more robust representation
+    const avgDescriptor = new Float32Array(128);
+    for (const d of collectedDescriptors) {
+      for (let j = 0; j < 128; j++) avgDescriptor[j] += d[j];
     }
+    for (let j = 0; j < 128; j++) avgDescriptor[j] /= collectedDescriptors.length;
 
-    const descriptor = Array.from(detections[0].descriptor);
-    const base64Image = canvas.toDataURL("image/png");
+    const descriptor = Array.from(avgDescriptor);
+    const base64Image = lastValidCanvas;
     setCapturedDescriptor(descriptor);
     setImagePreview(base64Image);
 
@@ -193,7 +215,9 @@ export function Register() {
         onSuccess: (data) => {
           toast({
             title: "Registration successful",
-            description: data.message || `${name} has been registered with face recognition.`,
+            description:
+              data.message ||
+              `${name} registered using ${collectedDescriptors.length}/${SAMPLE_COUNT} samples.`,
             action: <CheckCircle2 className="h-5 w-5 text-green-500" />,
           });
           setName("");
@@ -283,18 +307,35 @@ export function Register() {
 
             <canvas ref={captureCanvasRef} className="hidden" />
 
-            {faceStatusMessage && (
-              <div className={`flex items-center gap-2 text-sm ${faceStatusMessage.color}`}>
-                <faceStatusMessage.icon className="h-4 w-4" />
-                {faceStatusMessage.text}
+            {capturing ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sampling frame {captureProgress} of 5…
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-200"
+                    style={{ width: `${(captureProgress / 5) * 100}%` }}
+                  />
+                </div>
               </div>
-            )}
+            ) : (
+              <>
+                {faceStatusMessage && (
+                  <div className={`flex items-center gap-2 text-sm ${faceStatusMessage.color}`}>
+                    <faceStatusMessage.icon className="h-4 w-4" />
+                    {faceStatusMessage.text}
+                  </div>
+                )}
 
-            {capturedDescriptor && !stream && (
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <CheckCircle2 className="h-4 w-4" />
-                Face descriptor extracted (128 values)
-              </div>
+                {capturedDescriptor && !stream && (
+                  <div className="flex items-center gap-2 text-sm text-blue-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Face enrolled using averaged 5-sample descriptor
+                  </div>
+                )}
+              </>
             )}
 
             {!stream ? (
@@ -303,7 +344,13 @@ export function Register() {
                 Open Camera
               </Button>
             ) : (
-              <Button onClick={stopCamera} type="button" variant="outline" className="w-full sm:w-auto">
+              <Button
+                onClick={stopCamera}
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                disabled={capturing}
+              >
                 Cancel Camera
               </Button>
             )}
@@ -312,12 +359,14 @@ export function Register() {
           <Button
             className="w-full"
             onClick={captureAndRegister}
-            disabled={!stream || !name.trim() || registerUser.isPending || !modelsReady || faceStatus !== "ok"}
+            disabled={!stream || !name.trim() || registerUser.isPending || !modelsReady || faceStatus !== "ok" || capturing}
           >
-            {registerUser.isPending ? (
+            {capturing ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sampling {captureProgress}/5…</>
+            ) : registerUser.isPending ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Registering…</>
             ) : (
-              <><UserPlus className="w-4 h-4 mr-2" />Capture & Register</>
+              <><UserPlus className="w-4 h-4 mr-2" />Capture & Register (5 samples)</>
             )}
           </Button>
         </CardContent>

@@ -24,11 +24,11 @@ export function areFaceModelsLoaded(): boolean {
   return modelsLoaded;
 }
 
-export const FACE_MATCH_THRESHOLD = 0.5;
+export const FACE_MATCH_THRESHOLD = 0.55;
 export const COOLDOWN_MS = 10_000;
 
 export const DETECTOR_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 320,
+  inputSize: 416,
   scoreThreshold: 0.5,
 });
 

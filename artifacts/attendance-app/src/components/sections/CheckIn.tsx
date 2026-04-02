@@ -295,7 +295,7 @@ export function CheckIn() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Match threshold: 0.50 (strict) — Cooldown: 10 seconds per person —{" "}
+            Match threshold: 0.55 — inputSize: 416 — Cooldown: 10s per person —{" "}
             {usersWithDescriptors.length} face(s) enrolled
           </p>
         </CardContent>
