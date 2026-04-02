@@ -148,6 +148,12 @@ export function CheckIn() {
     }
   }, [modelsReady, handleMarkAttendance]);
 
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
   const startCamera = async () => {
     setCameraError(null);
     try {
@@ -155,7 +161,6 @@ export function CheckIn() {
         video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
       });
       setStream(mediaStream);
-      if (videoRef.current) videoRef.current.srcObject = mediaStream;
     } catch (err) {
       const msg =
         err instanceof DOMException && err.name === "NotAllowedError"

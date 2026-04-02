@@ -94,14 +94,19 @@ export function Register() {
     }
   }, [modelsReady]);
 
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
   const startCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      setStream(mediaStream);
-      if (videoRef.current) videoRef.current.srcObject = mediaStream;
       setImagePreview(null);
       setCapturedDescriptor(null);
       setFaceStatus("idle");
+      setStream(mediaStream);
     } catch {
       toast({
         variant: "destructive",
