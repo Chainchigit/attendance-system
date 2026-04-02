@@ -10,6 +10,7 @@ export const attendanceTable = pgTable("attendance", {
     .references(() => usersTable.id),
   userName: text("user_name").notNull(),
   date: date("date").notNull(),
+  type: text("type").notNull().default("check_in"),
   timestamp: timestamp("timestamp", { withTimezone: true })
     .notNull()
     .defaultNow(),

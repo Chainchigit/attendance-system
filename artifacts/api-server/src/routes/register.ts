@@ -14,7 +14,7 @@ if (!fs.existsSync(uploadsDir)) {
 
 router.post("/register", async (req, res) => {
   try {
-    const { name, image } = req.body;
+    const { name, image, faceDescriptor } = req.body;
 
     if (!name || !image) {
       res.status(400).json({ success: false, error: "Name and image are required" });
@@ -27,6 +27,15 @@ router.post("/register", async (req, res) => {
       return;
     }
 
+    const parsedDescriptor = faceDescriptor && Array.isArray(faceDescriptor)
+      ? (faceDescriptor as number[])
+      : null;
+
+    if (parsedDescriptor && parsedDescriptor.length !== 128) {
+      res.status(400).json({ success: false, error: "Invalid face descriptor — expected 128 values" });
+      return;
+    }
+
     const existing = await db
       .select()
       .from(usersTable)
@@ -34,6 +43,27 @@ router.post("/register", async (req, res) => {
       .limit(1);
 
     if (existing.length > 0) {
+      if (parsedDescriptor) {
+        await db
+          .update(usersTable)
+          .set({ faceDescriptor: parsedDescriptor })
+          .where(eq(usersTable.name, trimmedName));
+
+        const updated = existing[0];
+        res.status(200).json({
+          success: true,
+          message: `Face descriptor updated for "${trimmedName}"`,
+          user: {
+            id: updated.id,
+            name: updated.name,
+            imagePath: updated.imagePath,
+            hasFaceDescriptor: true,
+            registeredAt: updated.registeredAt,
+          },
+        });
+        return;
+      }
+
       res.status(409).json({ success: false, error: `User "${trimmedName}" is already registered` });
       return;
     }
@@ -49,6 +79,7 @@ router.post("/register", async (req, res) => {
       .values({
         name: trimmedName,
         imagePath: `/uploads/${filename}`,
+        faceDescriptor: parsedDescriptor,
       })
       .returning();
 
@@ -59,6 +90,7 @@ router.post("/register", async (req, res) => {
         id: user.id,
         name: user.name,
         imagePath: user.imagePath,
+        hasFaceDescriptor: !!user.faceDescriptor,
         registeredAt: user.registeredAt,
       },
     });
@@ -76,11 +108,36 @@ router.get("/users", async (req, res) => {
         id: u.id,
         name: u.name,
         imagePath: u.imagePath,
+        hasFaceDescriptor: !!u.faceDescriptor,
         registeredAt: u.registeredAt,
       })),
     });
   } catch (err) {
     req.log.error({ err }, "Error fetching users");
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+router.get("/users/descriptors", async (req, res) => {
+  try {
+    const users = await db
+      .select({
+        id: usersTable.id,
+        name: usersTable.name,
+        faceDescriptor: usersTable.faceDescriptor,
+      })
+      .from(usersTable)
+      .orderBy(usersTable.name);
+
+    res.json({
+      users: users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        faceDescriptor: u.faceDescriptor ?? undefined,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Error fetching user descriptors");
     res.status(500).json({ success: false, error: "Internal server error" });
   }
 });

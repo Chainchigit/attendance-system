@@ -28,10 +28,9 @@ router.post("/attendance", async (req, res) => {
     }
 
     const user = users[0];
-
     const today = new Date().toISOString().split("T")[0];
 
-    const existing = await db
+    const existingToday = await db
       .select()
       .from(attendanceTable)
       .where(
@@ -40,15 +39,17 @@ router.post("/attendance", async (req, res) => {
           eq(attendanceTable.date, today)
         )
       )
-      .limit(1);
+      .orderBy(attendanceTable.timestamp);
 
-    if (existing.length > 0) {
+    if (existingToday.length >= 2) {
       res.status(409).json({
         success: false,
-        error: `Attendance for "${trimmedName}" is already marked for today`,
+        error: `"${trimmedName}" has already checked in and out today`,
       });
       return;
     }
+
+    const attendanceType = existingToday.length === 0 ? "check_in" : "check_out";
 
     const [record] = await db
       .insert(attendanceTable)
@@ -56,6 +57,7 @@ router.post("/attendance", async (req, res) => {
         userId: user.id,
         userName: trimmedName,
         date: today,
+        type: attendanceType,
       })
       .returning();
 
@@ -64,6 +66,7 @@ router.post("/attendance", async (req, res) => {
       userId: record.userId,
       userName: record.userName,
       date: record.date,
+      type: record.type,
       timestamp: record.timestamp,
     });
   } catch (err) {
@@ -85,6 +88,7 @@ router.get("/attendance", async (req, res) => {
         userId: r.userId,
         userName: r.userName,
         date: r.date,
+        type: r.type,
         timestamp: r.timestamp,
       })),
     });
