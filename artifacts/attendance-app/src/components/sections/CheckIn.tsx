@@ -75,7 +75,7 @@ export function CheckIn() {
   }, []);
 
   const handleMarkAttendance = useCallback(
-    (userName: string) => {
+    (userId: number, userName: string) => {
       markAttendance.mutate(
         { data: { name: userName } },
         {
@@ -90,8 +90,8 @@ export function CheckIn() {
 
             const message =
               type === "check_in"
-                ? `Welcome ${userName}, checked in at ${timeStr}`
-                : `Goodbye ${userName}, checked out at ${timeStr}`;
+                ? `Welcome ${userName}! Checked in at ${timeStr}`
+                : `Goodbye ${userName}! Checked out at ${timeStr}`;
 
             toast({ title: message });
 
@@ -102,11 +102,20 @@ export function CheckIn() {
             queryClient.invalidateQueries({ queryKey: getGetAttendanceQueryKey() });
           },
           onError: (err) => {
-            toast({
-              variant: "destructive",
-              title: "Attendance Error",
-              description: err.error || "Could not mark attendance.",
-            });
+            if (err.status === 409) {
+              // Already completed check-in + check-out today — block for rest of day
+              cooldownMapRef.current[userId] = Number.MAX_SAFE_INTEGER / 2;
+              toast({
+                title: `${userName} — already done for today`,
+                description: err.data?.error ?? "Check-in and check-out already recorded.",
+              });
+            } else {
+              toast({
+                variant: "destructive",
+                title: "Attendance Error",
+                description: err.data?.error ?? err.message ?? "Could not mark attendance.",
+              });
+            }
           },
         }
       );
@@ -135,7 +144,7 @@ export function CheckIn() {
           const lastScan = cooldownMapRef.current[userId] || 0;
           if (now - lastScan > COOLDOWN_MS) {
             cooldownMapRef.current[userId] = now;
-            handleMarkAttendance(match.user.name);
+            handleMarkAttendance(userId, match.user.name);
           }
         }
       } catch {
