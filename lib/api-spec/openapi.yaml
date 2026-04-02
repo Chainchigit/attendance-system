@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Attendance System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User registration operations
+  - name: attendance
+    description: Attendance tracking operations
 paths:
   /healthz:
     get:
@@ -24,6 +28,93 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /register:
+    post:
+      operationId: registerUser
+      tags: [users]
+      summary: Register a new user with webcam image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterUserResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users:
+    get:
+      operationId: getUsers
+      tags: [users]
+      summary: Get all registered users
+      responses:
+        "200":
+          description: List of registered users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersListResponse"
+
+  /attendance:
+    post:
+      operationId: markAttendance
+      tags: [attendance]
+      summary: Mark attendance for a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkAttendanceRequest"
+      responses:
+        "201":
+          description: Attendance marked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+        "400":
+          description: Bad request or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Attendance already marked for today
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: getAttendance
+      tags: [attendance]
+      summary: Get all attendance records
+      responses:
+        "200":
+          description: List of attendance records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceListResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +125,108 @@ components:
       required:
         - status
 
+    RegisterUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Full name of the user
+        image:
+          type: string
+          description: Base64 encoded image data (PNG)
+      required:
+        - name
+        - image
+
+    RegisterUserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - success
+        - message
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        imagePath:
+          type: string
+        registeredAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - imagePath
+        - registeredAt
+
+    UsersListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+      required:
+        - users
+
+    MarkAttendanceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the user marking attendance
+      required:
+        - name
+
+    AttendanceRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        userName:
+          type: string
+        date:
+          type: string
+          format: date
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - userName
+        - date
+        - timestamp
+
+    AttendanceListResponse:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceRecord"
+      required:
+        - records
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        error:
+          type: string
+      required:
+        - success
+        - error
